@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -28,35 +28,33 @@ class HoneypotRequest(BaseModel):
     metadata: Optional[dict] = {}
 
 # ===============================
-# HEALTH / TEST ROUTE (GET)
+# HEALTH CHECK (GET)
+# Tester often sends GET first
 # ===============================
 @app.get("/api/honeypot")
 def honeypot_health_check():
-    """
-    This route exists ONLY to avoid 404 errors
-    when testers send a GET request.
-    """
     return {
         "status": "alive",
         "message": "Honeypot endpoint is reachable"
     }
 
 # ===============================
-# MAIN HONEYPOT LOGIC (POST)
+# MAIN HONEYPOT ENDPOINT (POST)
 # ===============================
 @app.post("/api/honeypot")
-def honeypot_endpoint(
-    request: HoneypotRequest,
-    x_api_key: str = Header(None)
+async def honeypot_endpoint(
+    request: Request,
+    payload: HoneypotRequest,
+    x_api_key: Optional[str] = Header(None)
 ):
-    # 🔐 API KEY VALIDATION
+    # 🔐 API KEY VALIDATION (POST ONLY)
     if x_api_key != API_KEY:
         raise HTTPException(
             status_code=401,
             detail="Invalid API key"
         )
 
-    incoming_text = request.message.text.lower()
+    incoming_text = payload.message.text.lower()
 
     # 🧠 BASIC SCAM SIGNALS (starter logic)
     scam_keywords = [
@@ -73,11 +71,11 @@ def honeypot_endpoint(
 
     is_scam = any(word in incoming_text for word in scam_keywords)
 
-    # 🎭 HUMAN-LIKE HONEYPOT REPLY
+    # 🎭 HUMAN-LIKE HONEYPOT RESPONSE
     if is_scam:
-        reply = "What do you mean? I didn’t get any official message about this."
+        reply = "What do you mean? I didn’t receive any official message about this."
     else:
-        reply = "Sorry, I’m not sure I understand. Can you explain?"
+        reply = "Sorry, I’m not sure I understand. Can you explain a bit more?"
 
     return {
         "status": "success",
